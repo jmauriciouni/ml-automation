@@ -1,0 +1,41 @@
+name: CD to Hugging Face Space
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main"]
+    paths:
+      - "app.py"
+      - "requirements.txt"
+      - "models/**"
+      - "train.py"
+      - "model_utils.py"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-lfs and huggingface_hub
+        run: |
+          sudo apt-get update && sudo apt-get install -y git-lfs
+          git lfs install
+          python -m pip install --upgrade pip
+          pip install huggingface_hub
+
+      - name: Push to Space repo
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+        run: |
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_ID space_repo
+          rsync -av --delete ./ space_repo/ --exclude ".git" --exclude ".github"
+          cd space_repo
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "deploy: sync from GitHub main" || echo "No changes to commit"
+          git push origin HEAD
